@@ -4,6 +4,10 @@ import os,sys
 import argparse
 import time
 
+# This app reads tiles from an SVS file. The tiles to be read are first divided up among N processes. Then, 
+# N processes are launched, each of which reads the tiles for which it is responsible. The processes issue 
+# requests to the iipsrv.fcgi service on some specified VM.                                                                    
+
 def emptyCaches():
     os.system('./stop_viewer.sh')
     os.system('./restart_gcsfuse.sh')
@@ -21,7 +25,8 @@ def genUrls(args):
         outputf.append(file("urls"+str(proc),'w'))
     proc = 0;
     for line in inputf:
-        s = 'url="http://35.203.177.233/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
+#        s = 'url="http://35.203.177.233/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
+        s = 'url="http://'+args.ip_addr+'/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
         outputf[proc].write(s+'\n')
         proc = (proc+1) % args.procs
     for proc in range(args.procs):
@@ -49,12 +54,15 @@ def measure(args):
 def parseargs():
     parser = argparse.ArgumentParser(description="Build svs image metadata table")
     parser.add_argument ( "-v", "--verbosity", action="count",default=1,help="increase output verbosity" )
-    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/images/isb-cgc-open/NCI-GDC/legacy/TCGA/TCGA-CHOL/Other/Diagnostic_image/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
-    parser.add_argument ( "-t", "--tiles", type=str, help="File path", default='tiles.txt')
+#    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/images/isb-cgc-open/NCI-GDC/legacy/TCGA/TCGA-CHOL/Other/Diagnostic_image/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
+    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/image/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
+    parser.add_argument ( "-t", "--tiles", type=str, help="File path", default='rand_tiles.txt')
 #    parser.add_argument ( "-u", "--urls", type=str, help="File to collect urls", default='urls.txt')
+    parser.add_argument ( "-i", "--ip_addr", type=str, help="IP address of VM to test", default='35.203.151.115')
     parser.add_argument ( "-p", "--procs", type=int, help="Processes", default=1)
     parser.add_argument ( "-r", "--reps", type=int, help="Repetitions", default=1)
     parser.add_argument ( "-f", "--flush", type=int, help="Flush cache", default=1)
+
     return(parser.parse_args())
 
 if __name__ == '__main__':

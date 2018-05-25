@@ -4,6 +4,9 @@ import os,sys
 import argparse
 import time
 
+# This app reads tiles from an SVS file. For each tile, a new process is spawned. The process issues a 
+# request to the iipsrv.fcgi service on some specified VM.
+
 def emptyCaches():
     os.system('./restart_gcsfuse.sh')
     os.system('./restart_viewer.sh')
