@@ -3,18 +3,22 @@ from multiprocessing import Process,BoundedSemaphore
 import os,sys
 import argparse
 import time
+import pycurl
+from StringIO import StringIO
+import subprocess
+from time import sleep
 
-# This app reads tiles from an SVS file. The tiles to be read are first divided up among N processes. Then, 
-# N processes are launched, each of which reads the tiles for which it is responsible. The processes issue 
-# requests to the iipsrv.fcgi service on some specified VM.                                                                    
+# This app reads tiles from an SVS file. The tiles to be read are first divided up among N files. Then, 
+# N processes are launched, each of which reads the tiles for which it is responsible. 
+# The processes issue requests to the iipsrv.fcgi service on the local host, where iipsrv is presumably
+# running.                                                                    
 
 def emptyCaches():
-    os.system('./stop_viewer.sh')
-    os.system('./restart_gcsfuse.sh')
-    os.system('./start_viewer.sh')
+    # The following presumes that quip-distro is installed locally.
+    os.system('/etc/rc.local')
 
 def readTiles(args, proc, sema):
-    os.system("curl -s -K "+ "urls"+str(proc) + '> /dev/null')
+    subprocess.call(['/usr/bin/curl', '-k', '-K', '/home/cvproc/gcsfuse-perf/urls0'])
     sema.release()
 
 def genUrls(args):
@@ -24,14 +28,20 @@ def genUrls(args):
     for proc in range(args.procs) :
         outputf.append(file("urls"+str(proc),'w'))
     proc = 0;
+
     for line in inputf:
-#        s = 'url="http://35.203.177.233/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
-        s = 'url="http://'+args.ip_addr+'/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
+        # Instead of sending all of stdout to /dev/null, we have curl write received data to a file.
+        # This requires a -o parameter for each --url parameter
+        o = '-o "foo" ' 
+        outputf[proc].write(o+'\n')
+        s = '--url "https://'+args.ip_addr+'/fcgi-bin/iipsrv.fcgi?DeepZoom='+args.slide+line.rstrip()+'"'
         outputf[proc].write(s+'\n')
         proc = (proc+1) % args.procs
+
     for proc in range(args.procs):
         outputf[proc].close
     inputf.close()
+
 
 def measure(args):
     procs=[]
@@ -54,11 +64,11 @@ def measure(args):
 def parseargs():
     parser = argparse.ArgumentParser(description="Build svs image metadata table")
     parser.add_argument ( "-v", "--verbosity", action="count",default=1,help="increase output verbosity" )
-#    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/images/isb-cgc-open/NCI-GDC/legacy/TCGA/TCGA-CHOL/Other/Diagnostic_image/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
-    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/image/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
+    parser.add_argument ( "-s", "--slide", type=str, help="File path", default='/data/images/imaging-west/09074f6d-932b-43db-b086-601533ba40a0/TCGA-3X-AAVA-01Z-00-DX1.A04F5D5B-5D2B-478E-90BE-572DC5E3FAE6.svs')
     parser.add_argument ( "-t", "--tiles", type=str, help="File path", default='rand_tiles.txt')
-#    parser.add_argument ( "-u", "--urls", type=str, help="File to collect urls", default='urls.txt')
-    parser.add_argument ( "-i", "--ip_addr", type=str, help="IP address of VM to test", default='35.203.151.115')
+    # Actually, as currently structured, curl requests must be to the local host because the emptyCaches()
+    # function assumes that the iipsrv server is running locally
+    parser.add_argument ( "-i", "--ip_addr", type=str, help="IP address of VM to test", default='localhost:5001')
     parser.add_argument ( "-p", "--procs", type=int, help="Processes", default=1)
     parser.add_argument ( "-r", "--reps", type=int, help="Repetitions", default=1)
     parser.add_argument ( "-f", "--flush", type=int, help="Flush cache", default=1)
@@ -76,6 +86,10 @@ if __name__ == '__main__':
 
         if args.flush:
             emptyCaches()
+
+        # Give the server a little time to get going. If we don't, the first bunch of requests
+        # are rejected.
+        sleep(10)
 
         t0 = time.time()
         measure(args)
